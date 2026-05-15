@@ -284,6 +284,14 @@ export default function App() {
             </ScrollView>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.clearHistoryButton}
+          onPress={() => setUserHistory([])}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.clearHistoryButtonText}>Clear History</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -521,5 +529,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     color: '#e2e8f0',
+  },
+  clearHistoryButton: {
+    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#64748b',
+  },
+  clearHistoryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#475569',
+    letterSpacing: 0.3,
   },
 });
