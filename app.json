@@ -1,38 +1,59 @@
 {
   "expo": {
-    "name": "period-tracker",
+    "name": "Regina",
     "slug": "period-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-app.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FDFBF7"
+      "backgroundColor": "#E6C6C6"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#FDFBF7"
+        "foregroundImage": "./assets/icon-foreground.png",
+        "backgroundColor": "#E6C6C6"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.ishanrwt.periodtracker"
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/icon-app.png"
     },
     "plugins": [
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#E6C6C6"
+        }
+      ],
+      [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/icon-app.png",
           "color": "#E8B4B8"
         }
-      ]
-    ]
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fc116cf3-333f-43bd-9191-8dbbf1267f87"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fc116cf3-333f-43bd-9191-8dbbf1267f87"
+    }
   }
 }

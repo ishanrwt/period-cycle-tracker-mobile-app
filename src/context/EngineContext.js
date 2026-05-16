@@ -8,6 +8,9 @@ import {
   addDaysToIsoDate,
 } from '../utils/engine';
 import { scheduleAllCycleNotifications } from '../utils/notifications';
+import { SPLASH_PINK } from '../constants/theme';
+
+const ONBOARDING_KEY = '@has_completed_onboarding';
 
 const EngineContext = createContext(null);
 
@@ -28,6 +31,7 @@ export const EngineProvider = ({ children }) => {
   const [avatarUri, setAvatarUriState] = useState(null);
   // avatarPresetIndex is a number (0-7) for preset images, or null
   const [avatarPresetIndex, setAvatarPresetIndexState] = useState(null);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -41,12 +45,14 @@ export const EngineProvider = ({ children }) => {
           storedAvatarUri,
           storedPresetIndex,
           storedPeriodLength,
+          storedOnboarding,
         ] = await AsyncStorage.multiGet([
           '@user_history',
           '@user_name',
           '@avatar_uri',
           '@avatar_preset_index',
           '@period_length',
+          ONBOARDING_KEY,
         ]);
 
         if (storedHistory[1]) setUserHistory(JSON.parse(storedHistory[1]));
@@ -54,6 +60,9 @@ export const EngineProvider = ({ children }) => {
         if (storedAvatarUri[1]) setAvatarUriState(storedAvatarUri[1]);
         if (storedPresetIndex[1] !== null) setAvatarPresetIndexState(JSON.parse(storedPresetIndex[1]));
         if (storedPeriodLength[1]) setPeriodLength(JSON.parse(storedPeriodLength[1]));
+        if (storedOnboarding[1] === 'true') {
+          setHasCompletedOnboarding(true);
+        }
       } catch (e) {
         console.error('Failed to load data from AsyncStorage', e);
       } finally {
@@ -115,6 +124,11 @@ export const EngineProvider = ({ children }) => {
       ['@avatar_preset_index', JSON.stringify(index)],
       ['@avatar_uri', ''],
     ]).catch(e => console.error('Failed to save avatar preset', e));
+  };
+
+  const completeOnboarding = async () => {
+    setHasCompletedOnboarding(true);
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
   };
 
   // ─── Engine computed values ───────────────────────────────────────────────
@@ -216,11 +230,14 @@ export const EngineProvider = ({ children }) => {
     setAvatarUri,
     avatarPresetIndex,
     setAvatarPresetIndex,
+    hasCompletedOnboarding,
+    completeOnboarding,
+    isLoaded,
   };
 
   // Block rendering until AsyncStorage has finished loading
   if (!isLoaded) {
-    return <View style={{ flex: 1, backgroundColor: '#FDFBF7' }} />;
+    return <View style={{ flex: 1, backgroundColor: SPLASH_PINK }} />;
   }
 
   return (
