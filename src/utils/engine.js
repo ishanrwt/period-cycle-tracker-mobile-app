@@ -128,3 +128,46 @@ export function computePhasePlan(userHistory, averageCycle) {
     secretory: cycleRangeToDates(anchor, ovulationDay + 1, averageCycle),
   };
 }
+
+/**
+ * Upcoming calendar dates for the next phase transitions and predicted period start.
+ * Rolls forward across cycles until each date is strictly after today.
+ *
+ * @param {string} lastPeriodStartDate — YYYY-MM-DD anchor (cycle day 1)
+ * @param {number} averageCycleLength
+ * @param {number} [bleedDaysForPhases=5] — menstrual length used for follicular start
+ * @returns {{ follicular: string, ovulation: string, luteal: string, nextPeriod: string } | null}
+ */
+export function computeUpcomingPhaseTransitionDates(
+  lastPeriodStartDate,
+  averageCycleLength,
+  bleedDaysForPhases = 5
+) {
+  if (!lastPeriodStartDate || !Number.isFinite(averageCycleLength) || averageCycleLength < 1) {
+    return null;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const ovulationDay = averageCycleLength - 14;
+
+  const pickFirstFuture = (offsetFromAnchor) => {
+    for (let cycle = 0; cycle < 24; cycle += 1) {
+      const anchor = addDaysToIsoDate(
+        lastPeriodStartDate,
+        cycle * averageCycleLength
+      );
+      const date = addDaysToIsoDate(anchor, offsetFromAnchor);
+      if (date > today) {
+        return date;
+      }
+    }
+    return null;
+  };
+
+  return {
+    follicular: pickFirstFuture(bleedDaysForPhases),
+    ovulation: pickFirstFuture(ovulationDay - 3),
+    luteal: pickFirstFuture(ovulationDay),
+    nextPeriod: pickFirstFuture(averageCycleLength),
+  };
+}

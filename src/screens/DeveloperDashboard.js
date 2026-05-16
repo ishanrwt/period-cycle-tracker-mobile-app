@@ -1,582 +1,726 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   ScrollView,
-  TextInput,
+  Animated,
+  Dimensions,
+  Modal,
   Alert,
+  Easing
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle, G } from 'react-native-svg';
 
-import {
-  addDaysToIsoDate,
-  formatRange,
-  sortHistoryChronological,
-  computeAverageCycle,
-  computePhasePlan,
-} from '../utils/engine';
+import { formatRange } from '../utils/engine';
+import { useEngine } from '../context/EngineContext';
 
-export default function DeveloperDashboard() {
-  const [userHistory, setUserHistory] = useState([]);
-  const [dateInput, setDateInput] = useState('');
-  const [periodLength, setPeriodLength] = useState(6);
+// ─── Inline Calendar Picker ───────────────────────────────────────────────────
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_NAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-  const handleLogDate = () => {
-    const trimmed = dateInput.trim();
-    if (!trimmed) {
-      return;
-    }
+function CalendarPicker({ selectedDate, onSelectDate }) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(selectedDate ? new Date(selectedDate).getFullYear() : today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(selectedDate ? new Date(selectedDate).getMonth() : today.getMonth());
 
-    const duplicate = userHistory.some(
-      (e) => e.type === 'period' && e.startDate === trimmed
-    );
-    if (duplicate) {
-      Alert.alert(
-        'Duplicate start date',
-        `An entry with start date ${trimmed} already exists.`
-      );
-      return;
-    }
-
-    const endDate = addDaysToIsoDate(trimmed, periodLength - 1);
-    const newEvent = {
-      type: 'period',
-      startDate: trimmed,
-      endDate,
-    };
-    setUserHistory(sortHistoryChronological([...userHistory, newEvent]));
-    setDateInput('');
+  const goBack = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const goForward = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
   };
 
-  const lastEntryAfterSort = useMemo(() => {
-    if (userHistory.length === 0) {
-      return null;
-    }
-    return sortHistoryChronological(userHistory)[userHistory.length - 1];
-  }, [userHistory]);
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  const showStartPeriodToday =
-    userHistory.length === 0 ||
-    (lastEntryAfterSort != null && lastEntryAfterSort.endDate != null);
-
-  const todayIso = () => new Date().toISOString().split('T')[0];
-
-  const handleStartPeriodToday = () => {
-    const today = todayIso();
-    const duplicate = userHistory.some(
-      (e) => e.type === 'period' && e.startDate === today
-    );
-    if (duplicate) {
-      Alert.alert(
-        'Duplicate start date',
-        `An entry with start date ${today} already exists.`
-      );
-      return;
-    }
-    const newEvent = { type: 'period', startDate: today, endDate: null };
-    setUserHistory(sortHistoryChronological([...userHistory, newEvent]));
+  const toIso = (d) => {
+    const mm = String(viewMonth + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    return `${viewYear}-${mm}-${dd}`;
   };
 
-  const handleEndPeriodToday = () => {
-    const today = todayIso();
-    const sorted = sortHistoryChronological(userHistory);
-    const last = sorted[sorted.length - 1];
-    if (!last || last.endDate != null) {
-      return;
-    }
-    setUserHistory(
-      userHistory.map((e) =>
-        e.type === 'period' &&
-        e.startDate === last.startDate &&
-        e.endDate == null
-          ? { ...e, endDate: today }
-          : e
-      )
-    );
-  };
-
-  const averageCycle = useMemo(
-    () => computeAverageCycle(userHistory),
-    [userHistory]
-  );
-
-  const phasePlan = useMemo(
-    () => computePhasePlan(userHistory, averageCycle),
-    [userHistory, averageCycle]
-  );
-
-  const periodCount = userHistory.filter(
-    (e) => e.type === 'period'
-  ).length;
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        style={styles.pageScroll}
-        contentContainerStyle={styles.pageContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.dashboardTitle}>Developer Testing Dashboard</Text>
-        <Text style={styles.dashboardSubtitle}>
-          Flight-deck layout for engine, sorting, and phase verification
-        </Text>
-
-        {/* SECTION 1 · CONTROL TOWER */}
-        <View style={styles.section}>
-          <Text style={styles.sectionKicker}>SECTION 1</Text>
-          <Text style={styles.sectionTitle}>Control Tower</Text>
-          <Text style={styles.sectionHint}>User inputs</Text>
-
-          <Text style={styles.label}>Enter Date (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={dateInput}
-            onChangeText={setDateInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <TouchableOpacity style={styles.logPeriodButton} onPress={handleLogDate}>
-            <Text style={styles.logPeriodButtonText}>Log Period</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.label}>Current cycle (live)</Text>
-          <Text style={styles.currentCycleHint}>
-            Opens a bleeding window with end unknown until you close it.
-          </Text>
-          {showStartPeriodToday ? (
-            <TouchableOpacity
-              style={styles.currentCycleStartBtn}
-              onPress={handleStartPeriodToday}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.currentCycleStartBtnText}>
-                Start Period Today
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.currentCycleEndBtn}
-              onPress={handleEndPeriodToday}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.currentCycleEndBtnText}>
-                End Period Today
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <Text style={styles.label}>Period Length (Days)</Text>
-          <Text style={styles.stepperHint}>Range: 3–10 (stepped)</Text>
-          <View style={styles.stepperRow}>
-            <TouchableOpacity
-              style={[
-                styles.stepperBtn,
-                periodLength <= 3 && styles.stepperBtnDisabled,
-              ]}
-              disabled={periodLength <= 3}
-              onPress={() => setPeriodLength((n) => Math.max(3, n - 1))}
-            >
-              <Text style={styles.stepperBtnText}>−</Text>
-            </TouchableOpacity>
-            <View style={styles.stepperValueWrap}>
-              <Text style={styles.stepperValue}>{periodLength}</Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.stepperBtn,
-                periodLength >= 10 && styles.stepperBtnDisabled,
-              ]}
-              disabled={periodLength >= 10}
-              onPress={() => setPeriodLength((n) => Math.min(10, n + 1))}
-            >
-              <Text style={styles.stepperBtnText}>+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* SECTION 2 · ENGINE READOUT */}
-        <View style={styles.section}>
-          <Text style={styles.sectionKicker}>SECTION 2</Text>
-          <Text style={styles.sectionTitle}>Engine Readout</Text>
-          <Text style={styles.sectionHint}>Real-time math</Text>
-
-          <View style={styles.engineCard}>
-            <Text style={styles.engineAverageValue}>
-              Detected Average: {averageCycle} Days
-            </Text>
-            <Text style={styles.engineNote}>
-              Note: Gaps &gt; 45 days are ignored by the engine filter.
-            </Text>
-            <View style={styles.engineDivider} />
-            <Text style={styles.engineCounterLabel}>Logged periods</Text>
-            <Text style={styles.engineCounterValue}>{periodCount}</Text>
-          </View>
-        </View>
-
-        {/* SECTION 3 · FORTUNE TELLER'S BOARD */}
-        <View style={styles.section}>
-          <Text style={styles.sectionKicker}>SECTION 3</Text>
-          <Text style={styles.sectionTitle}>Fortune Teller's Board</Text>
-          <Text style={styles.sectionHint}>
-            Predicted phases from most recent period (anchor)
-          </Text>
-
-          {phasePlan ? (
-            <View style={styles.boardCard}>
-              <View style={styles.boardRow}>
-                <Text style={styles.boardPhase}>Menstruation</Text>
-                <Text style={styles.boardRange}>
-                  {formatRange(phasePlan.menstrual)}
-                </Text>
-              </View>
-              <View style={styles.boardDivider} />
-              <View style={styles.boardRow}>
-                <Text style={styles.boardPhase}>Follicular Phase</Text>
-                <Text style={styles.boardRange}>
-                  {formatRange(phasePlan.proliferative)}
-                </Text>
-              </View>
-              <View style={styles.boardDivider} />
-              <View style={styles.boardRow}>
-                <Text style={styles.boardPhase}>Ovulation</Text>
-                <Text style={styles.boardRange}>
-                  {formatRange(phasePlan.highFertility)}
-                </Text>
-              </View>
-              <View style={styles.boardDivider} />
-              <View style={styles.boardRow}>
-                <Text style={styles.boardPhase}>Luteal Phase</Text>
-                <Text style={styles.boardRange}>
-                  {formatRange(phasePlan.secretory)}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.boardEmpty}>
-              <Text style={styles.boardEmptyText}>
-                Log a period start to see upcoming calendar ranges. (Engine
-                needs non-empty userHistory.)
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* SECTION 4 · THE BLACK BOX */}
-        <View style={styles.section}>
-          <Text style={styles.sectionKicker}>SECTION 4</Text>
-          <Text style={styles.sectionTitle}>The Black Box</Text>
-          <Text style={styles.sectionHint}>Raw database (chronological order)</Text>
-
-          <View style={styles.blackBoxOuter}>
-            <ScrollView
-              style={styles.blackBoxScroll}
-              contentContainerStyle={styles.blackBoxScrollContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-            >
-              <Text
-                style={styles.blackBoxJson}
-                selectable
-              >
-                {JSON.stringify(userHistory, null, 2)}
-              </Text>
-            </ScrollView>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.clearHistoryButton}
-          onPress={() => setUserHistory([])}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.clearHistoryButtonText}>Clear History</Text>
+    <View style={calStyles.wrapper}>
+      {/* Month / Year header */}
+      <View style={calStyles.header}>
+        <TouchableOpacity onPress={goBack} style={calStyles.navBtn}>
+          <Text style={calStyles.navText}>‹</Text>
         </TouchableOpacity>
-      </ScrollView>
+        <Text style={calStyles.monthLabel}>{MONTH_NAMES[viewMonth]} {viewYear}</Text>
+        <TouchableOpacity onPress={goForward} style={calStyles.navBtn}>
+          <Text style={calStyles.navText}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Day names */}
+      <View style={calStyles.dayNamesRow}>
+        {DAY_NAMES.map(d => <Text key={d} style={calStyles.dayName}>{d}</Text>)}
+      </View>
+
+      {/* Grid */}
+      <View style={calStyles.grid}>
+        {cells.map((day, idx) => {
+          if (!day) return <View key={`e-${idx}`} style={calStyles.cell} />;
+          const iso = toIso(day);
+          const isSelected = iso === selectedDate;
+          const isToday = iso === todayIso;
+          const isFuture = iso > todayIso;
+          return (
+            <TouchableOpacity
+              key={iso}
+              style={[
+                calStyles.cell,
+                isSelected && calStyles.cellSelected,
+                isToday && !isSelected && calStyles.cellToday,
+                isFuture && calStyles.cellFuture,
+              ]}
+              onPress={() => !isFuture && onSelectDate(iso)}
+              activeOpacity={isFuture ? 1 : 0.7}
+            >
+              <Text style={[
+                calStyles.cellText,
+                isSelected && calStyles.cellTextSelected,
+                isFuture && calStyles.cellTextFuture,
+              ]}>{day}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
+const calStyles = StyleSheet.create({
+  wrapper: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, marginBottom: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  navBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  navText: { fontSize: 24, color: '#333333', fontWeight: '400' },
+  monthLabel: { fontSize: 16, fontWeight: '600', color: '#333333', fontFamily: 'Inter' },
+  dayNamesRow: { flexDirection: 'row', marginBottom: 4 },
+  dayName: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600', color: '#888888', fontFamily: 'Inter' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: '14.285%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  cellSelected: { backgroundColor: '#E8B4B8', borderRadius: 20 },
+  cellToday: { borderWidth: 1, borderColor: '#E8B4B8', borderRadius: 20 },
+  cellFuture: { opacity: 0.3 },
+  cellText: { fontSize: 13, color: '#333333', fontFamily: 'Inter' },
+  cellTextSelected: { color: '#333333', fontWeight: '700' },
+  cellTextFuture: { color: '#888888' },
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function DeveloperDashboard() {
+  const {
+    userHistory,
+    setUserHistory,
+    showStartPeriodToday,
+    togglePeriod,
+    averageCycle,
+    periodLength,
+    phasePlan,
+    currentDay,
+    activePhase,
+    isOverdue,
+    daysLate,
+    logHistoricalCycle
+  } = useEngine();
+  
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [historicalDate, setHistoricalDate] = useState('');
+  const [historicalLength, setHistoricalLength] = useState(6);
+  const overduePulse = useRef(new Animated.Value(1)).current;
+
+  const handleHistoricalSave = () => {
+    if (!historicalDate) {
+      Alert.alert("No Date Selected", "Please pick a start date from the calendar.");
+      return;
+    }
+    const success = logHistoricalCycle(historicalDate, historicalLength);
+    if (success) {
+      setModalVisible(false);
+      setHistoricalDate('');
+      setHistoricalLength(6);
+    } else {
+      Alert.alert("Duplicate Entry", "This cycle start date is already logged.");
+    }
+  };
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  // SVG Wheel Math
+  const r = 104;
+  const strokeWidth = 24;
+  const circumference = 2 * Math.PI * r;
+  
+  const mLen = periodLength || 6;
+  const fLen = Math.max(1, 13 - mLen);
+  const oLen = 4;
+  const lLen = Math.max(1, (averageCycle || 28) - 17);
+  const totalDays = mLen + fLen + oLen + lLen;
+
+  const mDash = (mLen / totalDays) * circumference;
+  const fDash = (fLen / totalDays) * circumference;
+  const oDash = (oLen / totalDays) * circumference;
+  const lDash = (lLen / totalDays) * circumference;
+
+  const mOffset = 0;
+  const fOffset = -mDash;
+  const oOffset = -(mDash + fDash);
+  const lOffset = -(mDash + fDash + oDash);
+  
+  // Clamp the day indicator dot: max one full revolution
+  const currentDayAngle = Math.min(((currentDay || 0) / totalDays) * 360, 359.9);
+
+  useEffect(() => {
+    // Pulse animation when overdue
+    if (isOverdue) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(overduePulse, { toValue: 0.5, duration: 900, useNativeDriver: true }),
+          Animated.timing(overduePulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, [currentDay]);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-180deg', '-90deg']
+  });
+
+  const phaseCards = [
+    { key: 'menstrual', label: 'Menstruation', color: '#E8B4B8', data: phasePlan?.menstrual },
+    { key: 'proliferative', label: 'Follicular Phase', color: '#B8CBD0', data: phasePlan?.proliferative },
+    { key: 'highFertility', label: 'Ovulation', color: '#A8B5A2', data: phasePlan?.highFertility },
+    { key: 'secretory', label: 'Luteal Phase', color: '#D8C9B0', data: phasePlan?.secretory }
+  ];
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      {/* Top App Bar - AURA */}
+      <View style={styles.appBar}>
+        <View style={styles.appBarIconPlaceholder} />
+        <Text style={styles.appBarTitle}>AURA</Text>
+        <View style={styles.appBarIconPlaceholder} />
+      </View>
+
+      <ScrollView
+        style={styles.pageScroll}
+        contentContainerStyle={styles.pageContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+          {/* Hero Section: Progress Ring */}
+          <View style={styles.heroSection}>
+            <View style={styles.ringContainer}>
+              <Animated.View style={{ transform: [{ rotate: spin }], opacity: isOverdue ? overduePulse : 1 }}>
+                <Svg width="240" height="240" viewBox="0 0 240 240">
+                  <G>
+                    <Circle cx="120" cy="120" r={r} stroke="rgba(0,0,0,0.03)" strokeWidth={strokeWidth} fill="none" />
+
+                    {isOverdue ? (
+                      // Overdue: solid full ring in taupe warning color
+                      <Circle
+                        cx="120" cy="120" r={r}
+                        stroke="#D8C9B0"
+                        strokeWidth={strokeWidth}
+                        fill="none"
+                        strokeDasharray={`${circumference} ${circumference}`}
+                        strokeDashoffset={0}
+                        strokeLinecap="round"
+                      />
+                    ) : (
+                      // Normal: phase arc segments
+                      <>
+                        <Circle cx="120" cy="120" r={r} stroke="#D8C9B0" strokeWidth={strokeWidth} fill="none" strokeDasharray={`${lDash} ${circumference}`} strokeDashoffset={lOffset} strokeLinecap="round" />
+                        <Circle cx="120" cy="120" r={r} stroke="#A8B5A2" strokeWidth={strokeWidth} fill="none" strokeDasharray={`${oDash} ${circumference}`} strokeDashoffset={oOffset} strokeLinecap="round" />
+                        <Circle cx="120" cy="120" r={r} stroke="#B8CBD0" strokeWidth={strokeWidth} fill="none" strokeDasharray={`${fDash} ${circumference}`} strokeDashoffset={fOffset} strokeLinecap="round" />
+                        <Circle cx="120" cy="120" r={r} stroke="#E8B4B8" strokeWidth={strokeWidth} fill="none" strokeDasharray={`${mDash} ${circumference}`} strokeDashoffset={mOffset} strokeLinecap="round" />
+                        {currentDay > 0 && (
+                          <G rotation={currentDayAngle} origin="120, 120">
+                            <Circle cx="120" cy={120 - r} r="8" fill="#333333" stroke="#FFFFFF" strokeWidth="2" />
+                          </G>
+                        )}
+                      </>
+                    )}
+                  </G>
+                </Svg>
+              </Animated.View>
+              
+              {/* Inner Circle Cutout */}
+              <View style={[styles.innerCircle, { position: 'absolute' }]}>
+                {isOverdue ? (
+                  <>
+                    <Text style={[styles.dayText, { fontSize: 28, color: '#C4956A' }]}>
+                      {daysLate} {daysLate === 1 ? 'Day' : 'Days'}
+                    </Text>
+                    <Text style={[styles.dayText, { fontSize: 18, fontWeight: '500', color: '#C4956A' }]}>Late</Text>
+                    <Text style={[styles.phaseSubtitle, { color: '#C4956A', fontSize: 12 }]}>Period Overdue</Text>
+                  </>
+                ) : currentDay ? (
+                  <>
+                    <Text style={styles.dayText}>Day {currentDay}</Text>
+                    <Text style={styles.phaseSubtitle}>
+                      {activePhase === 'menstrual' && 'Menstruation'}
+                      {activePhase === 'proliferative' && 'Follicular Phase'}
+                      {activePhase === 'highFertility' && 'Ovulation'}
+                      {activePhase === 'secretory' && 'Luteal Phase'}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.dayTextEmpty}>Log</Text>
+                    <Text style={styles.phaseSubtitle}>to start</Text>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Action Buttons Row */}
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity 
+                style={[styles.actionButton, { backgroundColor: '#E8B4B8' }]} 
+                onPress={togglePeriod}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.actionButtonText, { color: '#333333' }]}>
+                  {showStartPeriodToday ? 'Log Current Day' : 'End Period Today'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.actionButton, { backgroundColor: '#333333' }]} 
+                onPress={() => setModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>
+                  Log Past Cycle
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+
+        <Animated.View style={{ opacity: fadeAnim, marginTop: 32 }}>
+          {/* Phase Forecast Bento Cards */}
+          <Text style={styles.sectionTitle}>Upcoming Phases</Text>
+          <View style={styles.cardsContainer}>
+            {phasePlan ? (
+              phaseCards.map((phase) => {
+                const isActive = activePhase === phase.key;
+                return (
+                  <View 
+                    key={phase.key} 
+                    style={[
+                      styles.phaseCard, 
+                      { backgroundColor: `${phase.color}1A` }, // 10% opacity
+                      isActive && { backgroundColor: `${phase.color}33`, borderColor: `${phase.color}4D`, borderWidth: 1 }
+                    ]}
+                  >
+                    <View style={styles.phaseCardLeft}>
+                      <View style={[
+                        styles.dot, 
+                        { backgroundColor: phase.color },
+                        isActive && { shadowColor: phase.color, shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }
+                      ]} />
+                      <Text style={styles.phaseCardLabel}>{phase.label}</Text>
+                    </View>
+                    <Text style={styles.phaseCardDate}>
+                      {formatRange(phase.data)}
+                    </Text>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyCardText}>
+                  Please log a period to generate your phase forecast.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Footer Widget */}
+          {userHistory.length > 0 && (
+            <View style={styles.footerWidgetContainer}>
+              <View style={styles.footerWidget}>
+                <Text style={styles.footerWidgetText}>
+                  Average Cycle: {averageCycle} Days
+                </Text>
+              </View>
+            </View>
+          )}
+        </Animated.View>
+      </ScrollView>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Log Historical Cycle</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalLabel}>Start Date</Text>
+              {historicalDate ? (
+                <Text style={styles.selectedDateDisplay}>{historicalDate}</Text>
+              ) : null}
+              <CalendarPicker
+                selectedDate={historicalDate}
+                onSelectDate={setHistoricalDate}
+              />
+
+              <Text style={styles.modalLabel}>Period Length (Days)</Text>
+              <View style={styles.stepperContainer}>
+                <TouchableOpacity onPress={() => setHistoricalLength(Math.max(1, historicalLength - 1))} style={styles.stepperButton}>
+                  <Text style={styles.stepperButtonText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.stepperValue}>{historicalLength}</Text>
+                <TouchableOpacity onPress={() => setHistoricalLength(Math.min(14, historicalLength + 1))} style={styles.stepperButton}>
+                  <Text style={styles.stepperButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.modalSaveButton} onPress={handleHistoricalSave}>
+                <Text style={styles.modalSaveButtonText}>Save Entry</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
-  screen: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#e8ecf1',
-    paddingTop: 52,
+    backgroundColor: '#FDFBF7',
+  },
+  appBar: {
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(253, 251, 247, 0.9)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.03)',
+    zIndex: 10,
+  },
+  appBarTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: 3,
+    color: '#333333',
+    fontFamily: 'Inter',
+  },
+  appBarIconPlaceholder: {
+    width: 32,
+    height: 32,
+  },
+  appBarClearBtn: {
+    padding: 8,
+  },
+  appBarClearText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#888888',
   },
   pageScroll: {
     flex: 1,
   },
   pageContent: {
     paddingHorizontal: 20,
-    paddingBottom: 36,
+    paddingTop: 32,
+    paddingBottom: 40,
   },
-  dashboardTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: -0.3,
-  },
-  dashboardSubtitle: {
-    marginTop: 6,
-    marginBottom: 22,
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 20,
-  },
-  section: {
-    marginBottom: 22,
-    padding: 18,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  sectionKicker: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 2,
-  },
-  sectionHint: {
-    fontSize: 13,
-    color: '#64748b',
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#94a3b8',
-    backgroundColor: '#f8fafc',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    fontSize: 16,
-    marginBottom: 16,
-    color: '#0f172a',
-  },
-  logPeriodButton: {
-    backgroundColor: '#dc2626',
-    paddingVertical: 15,
-    borderRadius: 12,
+  heroSection: {
     alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#b91c1c',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    justifyContent: 'center',
+  },
+  ringContainer: {
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerCircle: {
+    width: 192,
+    height: 192,
+    borderRadius: 96,
+    backgroundColor: '#FDFBF7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayText: {
+    fontSize: 40,
+    fontWeight: '600',
+    color: '#333333',
+    letterSpacing: -0.5,
+    fontFamily: 'Inter',
+  },
+  dayTextEmpty: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: '#888888',
+    letterSpacing: -0.5,
+  },
+  phaseSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#A8B5A2',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    marginTop: 40,
+    gap: 12,
+    width: '100%',
+    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  logPeriodButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
-  currentCycleHint: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 10,
-    marginTop: -4,
-    lineHeight: 17,
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#333333',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+    fontFamily: 'Inter',
   },
-  currentCycleStartBtn: {
-    backgroundColor: '#0f766e',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
+  cardsContainer: {
+    flexDirection: 'column',
+    gap: 8,
   },
-  currentCycleStartBtnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  currentCycleEndBtn: {
-    backgroundColor: '#7c3aed',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  currentCycleEndBtnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  stepperHint: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 10,
-    marginTop: -4,
-  },
-  stepperRow: {
+  phaseCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 8,
   },
-  stepperBtn: {
-    width: 52,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
+  phaseCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  phaseCardLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333333',
+  },
+  phaseCardDate: {
+    fontSize: 16,
+    color: '#888888',
+    fontWeight: '400',
+  },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.02)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 6,
-  },
-  stepperBtnDisabled: {
-    backgroundColor: '#cbd5e1',
-  },
-  stepperBtnText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '600',
-    marginTop: -2,
-  },
-  stepperValueWrap: {
-    minWidth: 64,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: 'rgba(0,0,0,0.05)',
+    borderStyle: 'dashed',
+  },
+  emptyCardText: {
+    fontSize: 14,
+    color: '#888888',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  footerWidgetContainer: {
     alignItems: 'center',
+    marginTop: 32,
+    marginBottom: 16,
+  },
+  footerWidget: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  footerWidgetText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888888',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FDFBF7',
+    borderRadius: 24,
+    width: '92%',
+    maxHeight: '85%',
+    padding: 24,
+    paddingBottom: 32,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333333',
+    fontFamily: 'Inter',
+  },
+  modalCloseText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#888888',
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333333',
+    marginBottom: 8,
+    fontFamily: 'Inter',
+  },
+  selectedDateDisplay: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E8B4B8',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'Inter',
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  stepperButton: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperButtonText: {
+    fontSize: 24,
+    color: '#333333',
+    fontWeight: '500',
   },
   stepperValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  engineCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  engineAverageValue: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: -0.6,
-    lineHeight: 38,
-  },
-  engineNote: {
-    marginTop: 12,
-    fontSize: 13,
-    color: '#64748b',
-    lineHeight: 19,
-  },
-  engineDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#cbd5e1',
-    marginVertical: 16,
-  },
-  engineCounterLabel: {
-    fontSize: 13,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#475569',
+    color: '#333333',
+    marginHorizontal: 24,
+    fontFamily: 'Inter',
   },
-  engineCounterValue: {
-    marginTop: 6,
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0369a1',
-  },
-  boardCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    overflow: 'hidden',
-    backgroundColor: '#f8fafc',
-  },
-  boardRow: {
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  boardPhase: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  boardRange: {
-    fontSize: 14,
-    fontFamily: 'monospace',
-    color: '#0f172a',
-    lineHeight: 20,
-  },
-  boardDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#cbd5e1',
-  },
-  boardEmpty: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#94a3b8',
-  },
-  boardEmptyText: {
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 21,
-  },
-  blackBoxOuter: {
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#1e293b',
-    backgroundColor: '#0f172a',
-    overflow: 'hidden',
-    maxHeight: 260,
-  },
-  blackBoxScroll: {
-    maxHeight: 260,
-  },
-  blackBoxScrollContent: {
-    padding: 14,
-  },
-  blackBoxJson: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 17,
-    color: '#e2e8f0',
-  },
-  clearHistoryButton: {
-    marginTop: 4,
-    paddingVertical: 14,
-    borderRadius: 12,
+  modalSaveButton: {
+    backgroundColor: '#D8C9B0',
+    paddingHorizontal: 32,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#64748b',
+    justifyContent: 'center',
   },
-  clearHistoryButtonText: {
+  modalSaveButtonText: {
+    color: '#333333',
     fontSize: 16,
-    fontWeight: '700',
-    color: '#475569',
-    letterSpacing: 0.3,
-  },
+    fontWeight: '600',
+    fontFamily: 'Inter',
+  }
 });
