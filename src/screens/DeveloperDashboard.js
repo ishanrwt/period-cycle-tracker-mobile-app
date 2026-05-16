@@ -229,10 +229,10 @@ export default function DeveloperDashboard() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top App Bar - AURA */}
+      {/* Top App Bar - REGINA */}
       <View style={styles.appBar}>
         <View style={styles.appBarIconPlaceholder} />
-        <Text style={styles.appBarTitle}>AURA</Text>
+        <Text style={styles.appBarTitle}>REGINA</Text>
         <View style={styles.appBarIconPlaceholder} />
       </View>
 

@@ -1,37 +1,53 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEngine } from '../context/EngineContext';
 
 export default function CycleCalendar() {
   const { phasePlan } = useEngine();
 
-  // Generate calendar grid for current month
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const goToPreviousMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
   const calendarDays = useMemo(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 is Sunday
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const mm = String(viewMonth + 1).padStart(2, '0');
 
     const days = [];
-    // empty slots for start of month
     for (let i = 0; i < firstDayOfWeek; i++) {
       days.push(null);
     }
     for (let i = 1; i <= daysInMonth; i++) {
-      const d = new Date(Date.UTC(year, month, i));
-      const iso = d.toISOString().split('T')[0];
-      days.push({ dayNumber: i, isoDate: iso });
+      const dd = String(i).padStart(2, '0');
+      days.push({ dayNumber: i, isoDate: `${viewYear}-${mm}-${dd}` });
     }
-    
-    // pad end to make complete rows
+
     const paddingEnd = (7 - (days.length % 7)) % 7;
     for (let i = 0; i < paddingEnd; i++) {
       days.push(null);
     }
     return days;
-  }, []);
+  }, [viewYear, viewMonth]);
 
   const getDayColor = (isoDate) => {
     if (!phasePlan) return '#FFFFFF';
@@ -46,7 +62,10 @@ export default function CycleCalendar() {
     return '#FFFFFF'; // Default
   };
 
-  const monthName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const monthName = new Date(viewYear, viewMonth, 1).toLocaleString('default', {
+    month: 'long',
+    year: 'numeric',
+  });
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   return (
@@ -60,7 +79,23 @@ export default function CycleCalendar() {
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent}>
         
         <View style={styles.calendarHeader}>
+          <TouchableOpacity
+            style={styles.monthNavBtn}
+            onPress={goToPreviousMonth}
+            activeOpacity={0.7}
+            accessibilityLabel="Previous month"
+          >
+            <Text style={styles.monthNavText}>‹</Text>
+          </TouchableOpacity>
           <Text style={styles.monthTitle}>{monthName}</Text>
+          <TouchableOpacity
+            style={styles.monthNavBtn}
+            onPress={goToNextMonth}
+            activeOpacity={0.7}
+            accessibilityLabel="Next month"
+          >
+            <Text style={styles.monthNavText}>›</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.calendarCard}>
@@ -159,13 +194,28 @@ const styles = StyleSheet.create({
   },
   calendarHeader: {
     marginBottom: 24,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthNavBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthNavText: {
+    fontSize: 28,
+    color: '#333333',
+    fontWeight: '400',
   },
   monthTitle: {
     fontSize: 24,
     fontWeight: '600',
     color: '#333333',
     fontFamily: 'Inter',
+    minWidth: 200,
+    textAlign: 'center',
   },
   calendarCard: {
     backgroundColor: '#FFFFFF',

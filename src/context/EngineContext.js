@@ -23,7 +23,7 @@ export const EngineProvider = ({ children }) => {
   const [userHistory, setUserHistory] = useState([]);
   const [periodLength, setPeriodLength] = useState(6);
   // Profile state (moved here so it persists globally)
-  const [userName, setUserNameState] = useState('Aura User');
+  const [userName, setUserNameState] = useState('Regina User');
   // avatarUri is a string URI (gallery pick) or null
   const [avatarUri, setAvatarUriState] = useState(null);
   // avatarPresetIndex is a number (0-7) for preset images, or null

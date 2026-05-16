@@ -92,7 +92,7 @@ export async function scheduleAllCycleNotifications(userHistory, periodLength = 
   if (dates.nextPeriod) {
     const periodReminderDay = addDaysToIsoDate(dates.nextPeriod, -2);
     await scheduleAt9AM(periodReminderDay, {
-      title: 'AURA Insight',
+      title: 'REGINA Insight',
       body: 'Your next cycle is predicted to start in 2 days.',
     });
   }
